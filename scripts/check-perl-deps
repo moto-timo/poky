@@ -1,0 +1,62 @@
+#!/bin/sh
+# Use recipetool to check for missing PACKAGECONFIG/RDEPENDS in our perl recipes
+
+set -e
+
+perl_recipes () {
+    bitbake -s | grep 'perl' | grep -v '^perl' | grep -v native | awk '{print $1}'
+}
+
+get_value () {
+    sed -n 's/[^"]*"\([^"]*\)"/\1/p'
+}
+
+
+tempdir="$(mktemp -d -t "${0##*/}.XXXXXX")" || exit 1
+trap 'rm -rf "$tempdir"' EXIT INT TERM
+recipe_list="$tempdir/recipes"
+oldvalue="$tempdir/old"
+newvalue="$tempdir/new"
+
+
+# Gather list of '*-perl'* recipes
+perl_recipes > "$recipe_list"
+
+# Bootstrap the pkgdata for use by recipetool
+echo >&2 "Building perl to populate pkgdata"
+bitbake perl
+
+# Attempt to populate pkgdata further to pick up interdependencies
+# Fmt is used to limit the number of recipes per bitbake command, to avoid
+# line length failure in buildstats.
+cat "$recipe_list" | tr '\n' ' ' | sed 's,^ *,,; s, *$,,' | fmt -w 150 | \
+    while read recipes; do
+        echo >&2 "Building to populate pkgdata: $recipes"
+        bitbake -k $recipes || true
+    done
+
+echo >&2 "Processing perl recipes.."
+outfile="${0##*/}.txt"
+>"$outfile"
+while read recipe; do
+    SRC_URI="$(bitbake -e "$recipe" | grep "^SRC_URI=" | get_value | tr ' ' '\n' | head -n 1 | sed 's/ //g')" || break
+    bitbake -e "$recipe" | grep "^RDEPENDS_$recipe=" | get_value | tr ' ' '\n' | sort -u >"$oldvalue" || break
+    if [ -z "$SRC_URI" ]; then
+        echo >&2 "Error: no SRC_URI for $recipe, skipping"
+        continue
+    fi
+
+    recipefile="$tempdir/$recipe.bb"
+    recipetool create -o "$recipefile" "$SRC_URI" || continue
+    bitbake -e -b "$recipefile" | grep "^RDEPENDS_$recipe=" | get_value | tr ' ' '\n' | grep -vx "$recipe" | sort -u >"$newvalue"
+    new_rdepends="$(comm -13 "$oldvalue" "$newvalue" | tr '\n' ' ' | sed 's, *$,,; s,^ *,,')"
+    if [ -n "$new_rdepends" ] || grep -q PACKAGECONFIG "$recipefile"; then
+        echo "$recipe:"
+        if [ -n "$new_rdepends" ]; then
+            printf 'RDEPENDS_%s += "%s"\n' "$recipe" "$new_rdepends"
+        fi
+        grep '^#*PACKAGECONFIG' "$recipefile" || true
+    fi | tee -a "$outfile"
+done <"$recipe_list"
+printf >&2 'See `%s` for all the bits.\n' "$outfile"
+
