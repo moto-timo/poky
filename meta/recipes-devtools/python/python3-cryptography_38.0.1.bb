@@ -9,12 +9,9 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=bf405a8056a6647e7d077b0e7bc36aba \
                    "
 LDSHARED += "-pthread"
 
-SRC_URI[sha256sum] = "63f9c17c0e2474ccbebc9302ce2f07b55b3b3fcb211ded18a42d5764f5c10a82"
+SRC_URI[sha256sum] = "1db3d807a14931fa317f96435695d9ec386be7b84b618cc61cfa5d08b0ae33d7"
 
-SRC_URI += "file://run-ptest \
-           file://check-memfree.py \
-           file://0001-Cargo.toml-specify-pem-version.patch \
-           file://0002-Cargo.toml-edition-2018-2021.patch \
+SRC_URI += "file://0002-Cargo.toml-edition-2018-2021.patch \
            file://0001-pyproject.toml-remove-benchmark-disable-option.patch \
            crate://crates.io/Inflector/0.11.4 \
            crate://crates.io/aliasable/0.1.3 \
@@ -61,6 +58,7 @@ SRC_URI += "file://run-ptest \
            crate://crates.io/winapi-i686-pc-windows-gnu/0.4.0 \
            crate://crates.io/winapi-x86_64-pc-windows-gnu/0.4.0 \
            crate://crates.io/winapi/0.3.9 \
+           file://0001-Cargo.toml-specify-pem-version.patch \
            "
 
 inherit pypi python_setuptools3_rust
